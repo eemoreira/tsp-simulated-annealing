@@ -66,7 +66,7 @@ struct TSPSolver {
         return cost;
     }
 
-    bool shouldAccept(const std::vector<int> oldTour, const std::vector<int> newTour, double temperature) {
+    bool shouldAccept(const std::vector<int>& oldTour, const std::vector<int>& newTour, double temperature) {
         double oldCost = tourCost(oldTour);
         double newCost = tourCost(newTour);
         if (newCost < oldCost) {
@@ -91,13 +91,21 @@ struct TSPSolver {
         std::vector<int> tour(N);
         std::iota(tour.begin(), tour.end(), 0);
         shuffle(tour.begin(), tour.end(), rng);
+        std::ofstream fout("res/iterations.txt");
+        if (!fout.is_open()) {
+            throw std::runtime_error("Could not open file for writing iterations");
+        }
 
-        double T = 1000.0;
-        double T_min = 1e-8;
-        double decay = 0.998;
+        double T0 = 5.0;
+        double TN = 1e-7;
+        double N = 150000.0;
+        int it = 0;
 
-        std::cout << "Current temperature: " << T << ", Current tour cost: " << tourCost(tour) << '\n';
         while (true) {
+            double T = T0 - (T0 - TN) * (it / N);
+            if (T < TN) {
+                break;
+            }
             for (int i = 0; i < ITER_PER_TEMP; i++) {
                 std::vector<int> new_tour = tour;
                 applyPermutationNoise(new_tour);
@@ -105,12 +113,15 @@ struct TSPSolver {
                     swap(tour, new_tour);
                 }
             }
-            T *= decay;
-            if (T < T_min) {
-                break;
-            }
+#ifdef DEBUG
+            std::cout << "Iteration: " << it << ", tourCost: " << tourCost(tour) << '\n';
+#else
+            fout << it << ' ' << tourCost(tour) << '\n';
+#endif
+
+            it += 1;
         }
-        std::cout << "Current temperature: " << T << ", Current tour cost: " << tourCost(tour) << '\n';
+        std::cout << "Current temperature: " << TN << ", Current tour cost: " << tourCost(tour) << '\n';
 
         return tour;
     }
@@ -119,7 +130,7 @@ struct TSPSolver {
 
 signed main() {
 
-    auto dist = readMatrixDistanceFromFile("res/tsp-51.txt");
+    auto dist = readMatrixDistanceFromFile("res/tsp-100.txt");
     TSPSolver solver(dist, 10);
     auto best_tour = solver.solve();
 
