@@ -7,6 +7,7 @@
 #include <random>
 #include <algorithm>
 #include <chrono>
+#include "cooler.hpp"
 
 std::vector<std::vector<double>> readMatrixDistanceFromFile(const std::string& filename) {
     std::ifstream file(filename);
@@ -44,10 +45,33 @@ struct TSPSolver {
     std::mt19937 rng;
     int N;
     int ITER_PER_TEMP;
+    std::vector<cooler> cooling_schedules;
 
     TSPSolver(const std::vector<std::vector<double>>& distMatrix, int _ITER_PER_TEMP = 3)
         : dist(distMatrix), N(dist.size()), ITER_PER_TEMP(_ITER_PER_TEMP) {
             rng = std::mt19937((uint32_t)std::chrono::steady_clock::now().time_since_epoch().count());
+
+            cooling_schedules.emplace_back(
+                "Linear",
+                [&](double T0, double TN, int current_iter, int max_iter) {
+                    return T0 - (T0 - TN) * (current_iter / double(max_iter));
+                }
+            );
+            cooling_schedules.emplace_back(
+                "Exponential",
+                [&](double T0, double TN, int current_iter, int max_iter) {
+                    double alpha = std::pow(TN / T0, 1.0 / max_iter);
+                    return T0 * std::pow(alpha, current_iter);
+                }
+            );
+
+            cooling_schedules.emplace_back(
+                "Logistic",
+                [&](double T0, double TN, int current_iter, int max_iter) {
+                    return (T0 - TN) / (1 + std::exp(.3 * (current_iter - (double)max_iter / 2))) + TN;
+                }
+            );
+
         }
 
     int uniform(int l, int r) {
@@ -87,6 +111,14 @@ struct TSPSolver {
     }
 
     std::vector<int> solve() {
+        for (const auto& cooler : cooling_schedules) {
+            auto tour = work(cooler);
+            std::cout << "cooling method: " << cooler.name << ", Tour cost: " << tourCost(tour) << '\n';
+        }
+        return {};
+    }
+
+    std::vector<int> work(const cooler& cooler) {
 
         std::vector<int> tour(N);
         std::iota(tour.begin(), tour.end(), 0);
@@ -102,10 +134,11 @@ struct TSPSolver {
         int it = 0;
 
         while (true) {
-            double T = T0 - (T0 - TN) * (it / N);
+            double T = cooler(T0, TN, it, N);
             if (T < TN) {
                 break;
             }
+
             for (int i = 0; i < ITER_PER_TEMP; i++) {
                 std::vector<int> new_tour = tour;
                 applyPermutationNoise(new_tour);
