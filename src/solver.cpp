@@ -43,15 +43,19 @@ struct TSPSolver {
     std::vector<std::vector<double>> dist;
     std::mt19937 rng;
     int N;
-    int NUM_ITER;
+    int ITER_PER_TEMP;
 
-    TSPSolver(const std::vector<std::vector<double>>& distMatrix, int _NUM_ITER = 10000)
-        : dist(distMatrix), N(dist.size()), NUM_ITER(_NUM_ITER) {
+    TSPSolver(const std::vector<std::vector<double>>& distMatrix, int _ITER_PER_TEMP = 3)
+        : dist(distMatrix), N(dist.size()), ITER_PER_TEMP(_ITER_PER_TEMP) {
             rng = std::mt19937((uint32_t)std::chrono::steady_clock::now().time_since_epoch().count());
         }
 
     int uniform(int l, int r) {
         return std::uniform_int_distribution(l, r)(rng);
+    }
+
+    double uniform(double l, double r) {
+        return std::uniform_real_distribution(l, r)(rng);
     }
 
     double tourCost(const std::vector<int>& tour) {
@@ -60,6 +64,17 @@ struct TSPSolver {
             cost += dist[tour[i]][tour[(i + 1) % N]];
         }
         return cost;
+    }
+
+    bool shouldAccept(const std::vector<int> oldTour, const std::vector<int> newTour, double temperature) {
+        double oldCost = tourCost(oldTour);
+        double newCost = tourCost(newTour);
+        if (newCost < oldCost) {
+            return true;
+        }
+        double acceptanceProb = std::exp((oldCost - newCost) / temperature);
+        double randomProb = uniform(0.0, 1.0);
+        return randomProb < acceptanceProb;
     }
 
     void applyPermutationNoise(std::vector<int>& tour) {
@@ -71,13 +86,32 @@ struct TSPSolver {
         }
     }
 
-    std::vector<point> solve() {
+    std::vector<int> solve() {
 
         std::vector<int> tour(N);
         std::iota(tour.begin(), tour.end(), 0);
         shuffle(tour.begin(), tour.end(), rng);
 
-        return {};
+        double T = 1000.0;
+        double T_min = 1e-8;
+        double decay = 0.998;
+
+        while (true) {
+            std::cout << "Current temperature: " << T << ", Current tour cost: " << tourCost(tour) << '\n';
+            for (int i = 0; i < ITER_PER_TEMP; i++) {
+                std::vector<int> new_tour = tour;
+                applyPermutationNoise(new_tour);
+                if (shouldAccept(tour, new_tour, T)) {
+                    swap(tour, new_tour);
+                }
+            }
+            T *= decay;
+            if (T < T_min) {
+                break;
+            }
+        }
+
+        return tour;
     }
 
 };
@@ -85,12 +119,8 @@ struct TSPSolver {
 signed main() {
 
     auto dist = readMatrixDistanceFromFile("res/tsp-51.txt");
-    for (int i = 0; i < int(dist.size()); i++) {
-        for (int j = 0; j < int(dist.size()); j++) {
-            std::cout << dist[i][j] << ' ';
-        }
-        std::cout << '\n';
-    }
+    TSPSolver solver(dist, 10);
+    auto best_tour = solver.solve();
 
     return 0;
 }
