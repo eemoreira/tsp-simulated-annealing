@@ -96,8 +96,8 @@ struct TSPSolver {
         double T_min = 1e-8;
         double decay = 0.998;
 
+        std::cout << "Current temperature: " << T << ", Current tour cost: " << tourCost(tour) << '\n';
         while (true) {
-            std::cout << "Current temperature: " << T << ", Current tour cost: " << tourCost(tour) << '\n';
             for (int i = 0; i < ITER_PER_TEMP; i++) {
                 std::vector<int> new_tour = tour;
                 applyPermutationNoise(new_tour);
@@ -110,6 +110,7 @@ struct TSPSolver {
                 break;
             }
         }
+        std::cout << "Current temperature: " << T << ", Current tour cost: " << tourCost(tour) << '\n';
 
         return tour;
     }
