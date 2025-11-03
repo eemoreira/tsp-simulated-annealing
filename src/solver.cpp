@@ -3,6 +3,10 @@
 #include <fstream>
 #include "point.hpp"
 #include <sstream>
+#include <numeric>
+#include <random>
+#include <algorithm>
+#include <chrono>
 
 std::vector<std::vector<double>> readMatrixDistanceFromFile(const std::string& filename) {
     std::ifstream file(filename);
@@ -37,12 +41,42 @@ std::vector<std::vector<double>> readMatrixDistanceFromFile(const std::string& f
 
 struct TSPSolver {
     std::vector<std::vector<double>> dist;
+    std::mt19937 rng;
+    int N;
+    int NUM_ITER;
 
-    TSPSolver(const std::vector<std::vector<double>>& distMatrix)
-        : dist(distMatrix) {}
+    TSPSolver(const std::vector<std::vector<double>>& distMatrix, int _NUM_ITER = 10000)
+        : dist(distMatrix), N(dist.size()), NUM_ITER(_NUM_ITER) {
+            rng = std::mt19937((uint32_t)std::chrono::steady_clock::now().time_since_epoch().count());
+        }
+
+    int uniform(int l, int r) {
+        return std::uniform_int_distribution(l, r)(rng);
+    }
+
+    double tourCost(const std::vector<int>& tour) {
+        double cost = 0.0;
+        for (int i = 0; i < N; i++) {
+            cost += dist[tour[i]][tour[(i + 1) % N]];
+        }
+        return cost;
+    }
+
+    void applyPermutationNoise(std::vector<int>& tour) {
+        int number_swaps = uniform(1, 5);
+        while (number_swaps--) {
+            int i = uniform(0, N - 1);
+            int j = uniform(0, N - 1);
+            std::swap(tour[i], tour[j]);
+        }
+    }
 
     std::vector<point> solve() {
-        // Placeholder for TSP solving logic
+
+        std::vector<int> tour(N);
+        std::iota(tour.begin(), tour.end(), 0);
+        shuffle(tour.begin(), tour.end(), rng);
+
         return {};
     }
 
