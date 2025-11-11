@@ -3,7 +3,7 @@ CXX := g++
 SRC := src/solver.cpp
 BIN := src/binary
 PLOT_SCRIPT := res/plot.py
-LOG_FILE := res/iterations.txt
+PLOT_ANALYSIS_SCRIPT := res/analyze.py
 
 # Flags
 CXX_DEBUG_FLAGS   := -std=c++17 -g -O0 -Wall -Wextra -DLOCAL_DEBUG -fsanitize=address,undefined
@@ -16,25 +16,34 @@ RUNARGS ?=
 
 all: debug
 
-debug: $(SRC)
+debug:
 	$(CXX) $(CXX_DEBUG_FLAGS) -o $(BIN) $(SRC)
 	@echo "Running ./$(BIN) $(RUNARGS)"
 	./$(BIN) $(RUNARGS)
 
-release: $(SRC)
-	$(CXX) $(CXX_RELEASE_FLAGS) -o $(BIN) $(SRC)
+release-51: clean-res
+	$(CXX) $(CXX_RELEASE_FLAGS) -o $(BIN) $(SRC) -DFIFTY_ONE
 	@echo "Running ./$(BIN) $(RUNARGS)"
 	./$(BIN) $(RUNARGS)
 	@$(MAKE) plot
-	@open res/iterations.png
+	@open res/iterations_comparacao.png
+
+release-100: clean-res
+	$(CXX) $(CXX_RELEASE_FLAGS) -o $(BIN) $(SRC) -DONE_HUNDRED
+	@echo "Running ./$(BIN) $(RUNARGS)"
+	./$(BIN) $(RUNARGS)
+	@$(MAKE) plot
+	@open res/iterations_comparacao.png
 
 plot:
 	@echo "Gerando gráfico de iterações..."
-	@python3 $(PLOT_SCRIPT) $(LOG_FILE)
+	@python3 $(PLOT_SCRIPT)
+	@python3 $(PLOT_ANALYSIS_SCRIPT)
 
 clean:
 	-rm -f $(BIN)
 
 clean-res:
-	-rm -rf res/*.pgm res/*.mp4
+	-rm -rf res/Cooling*.txt
+	-rm -rf res/results.txt
 

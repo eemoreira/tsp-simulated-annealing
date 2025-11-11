@@ -18,28 +18,34 @@ def ler_dados(arquivo):
                     continue
     return iteracoes, custos
 
-def plotar(iteracoes, custos, saida):
+if __name__ == "__main__":
+    arquivos = [
+        ("res/Cooling-0_run_0.txt", "Cooling-0"),
+        ("res/Cooling-1_run_0.txt", "Cooling-1"),
+        ("res/Cooling-5_run_0.txt", "Cooling-5")
+    ]
+
     plt.figure(figsize=(10, 6))
-    plt.plot(iteracoes, custos, marker='o', linestyle='-', markersize=1, linewidth=1)
+
+    for caminho, nome in arquivos:
+        if not os.path.exists(caminho):
+            print(f"Arquivo não encontrado: {caminho}")
+            continue
+        iteracoes, custos = ler_dados(caminho)
+        if not iteracoes or not custos:
+            print(f"Nenhum dado válido encontrado em {caminho}.")
+            continue
+
+        plt.plot(iteracoes, custos, label=nome, linewidth=1)
+
     plt.xlabel("Iteração")
     plt.ylabel("Custo (tourCost)")
     plt.title("Evolução do Custo por Iteração")
     plt.grid(True)
+    plt.legend()
     plt.tight_layout()
+
+    saida = "res/iterations_comparacao.png"
     plt.savefig(saida)
-    print(f"Gráfico salvo em: {saida}")
-
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print(f"Uso: python {sys.argv[0]} <arquivo_log>")
-        sys.exit(1)
-
-    caminho = sys.argv[1]
-    iteracoes, custos = ler_dados(caminho)
-
-    if not iteracoes:
-        print("Nenhum dado encontrado no arquivo.")
-    else:
-        nome_saida = os.path.splitext(caminho)[0] + ".png"
-        plotar(iteracoes, custos, nome_saida)
+    print(f"Gráfico combinado salvo em: {saida}")
 

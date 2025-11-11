@@ -42,3 +42,7 @@
 
 #venv
 venv/
+
+#txt files
+*.txt
+res/*.txt

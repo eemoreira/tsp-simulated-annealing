@@ -7,7 +7,14 @@
 #include <random>
 #include <algorithm>
 #include <chrono>
+#include <thread>
+#include <mutex>
 #include "cooler.hpp"
+
+const double EPS = 1e-9;
+const double PI = std::acos(-1);
+
+static std::mutex results_mutex;
 
 std::vector<std::vector<double>> readMatrixDistanceFromFile(const std::string& filename) {
     std::ifstream file(filename);
@@ -46,19 +53,20 @@ struct TSPSolver {
     int N;
     int ITER_PER_TEMP;
     std::vector<cooler> cooling_schedules;
+    double max_dist = 0.0;
 
-    TSPSolver(const std::vector<std::vector<double>>& distMatrix, int _ITER_PER_TEMP = 3)
+    TSPSolver(const std::vector<std::vector<double>>& distMatrix, int _ITER_PER_TEMP = 1)
         : dist(distMatrix), N(dist.size()), ITER_PER_TEMP(_ITER_PER_TEMP) {
             rng = std::mt19937((uint32_t)std::chrono::steady_clock::now().time_since_epoch().count());
 
             cooling_schedules.emplace_back(
-                "Linear",
+                "Cooling-0",
                 [&](double T0, double TN, int current_iter, int max_iter) {
                     return T0 - (T0 - TN) * (current_iter / double(max_iter));
                 }
             );
             cooling_schedules.emplace_back(
-                "Exponential",
+                "Cooling-1",
                 [&](double T0, double TN, int current_iter, int max_iter) {
                     double alpha = std::pow(TN / T0, 1.0 / max_iter);
                     return T0 * std::pow(alpha, current_iter);
@@ -66,11 +74,23 @@ struct TSPSolver {
             );
 
             cooling_schedules.emplace_back(
-                "Logistic",
+                "Cooling-5",
                 [&](double T0, double TN, int current_iter, int max_iter) {
-                    return (T0 - TN) / (1 + std::exp(.3 * (current_iter - (double)max_iter / 2))) + TN;
+                    return (T0 - TN) / 2 * (1 + std::cos((current_iter / (double)max_iter) * PI)) + TN;
                 }
             );
+
+            for (int i = 0; i < N; i++) {
+                for (int j = 0; j < N; j++) {
+                    max_dist = std::max(max_dist, dist[i][j]);
+                }
+            }
+
+            for (int i = 0; i < N; i++) {
+                for (int j = 0; j < N; j++) {
+                    dist[i][j] /= max_dist;
+                }
+            }
 
         }
 
@@ -106,36 +126,35 @@ struct TSPSolver {
         while (number_swaps--) {
             int i = uniform(0, N - 1);
             int j = uniform(0, N - 1);
-            std::swap(tour[i], tour[j]);
+            //std::swap(tour[i], tour[j]);
+            std::reverse(tour.begin() + std::min(i, j), tour.begin() + std::max(i, j) + 1);
         }
     }
 
-    std::vector<int> solve() {
+    void solve(int run_id) {
         for (const auto& cooler : cooling_schedules) {
-            auto tour = work(cooler);
-            std::cout << "cooling method: " << cooler.name << ", Tour cost: " << tourCost(tour) << '\n';
+            work(cooler, run_id);
         }
-        return {};
     }
 
-    std::vector<int> work(const cooler& cooler) {
+    void work(const cooler& cooler, int run_id) {
 
         std::vector<int> tour(N);
         std::iota(tour.begin(), tour.end(), 0);
         shuffle(tour.begin(), tour.end(), rng);
-        std::ofstream fout("res/iterations.txt");
+        std::ofstream fout("res/" + cooler.name + "_run_" + std::to_string(run_id) + ".txt");
         if (!fout.is_open()) {
             throw std::runtime_error("Could not open file for writing iterations");
         }
 
-        double T0 = 5.0;
-        double TN = 1e-7;
-        double N = 150000.0;
+        double T0 = 0.5;
+        double TN = 1e-10;
+        int n = 1500000.0;
         int it = 0;
 
-        while (true) {
-            double T = cooler(T0, TN, it, N);
-            if (T < TN) {
+        while (it < n) {
+            double T = cooler(T0, TN, it, n);
+            if (T - TN < EPS) {
                 break;
             }
 
@@ -146,26 +165,64 @@ struct TSPSolver {
                     swap(tour, new_tour);
                 }
             }
-#ifdef DEBUG
-            std::cout << "Iteration: " << it << ", tourCost: " << tourCost(tour) << '\n';
+#ifdef LOCAL_DEBUG
+            std::cout << "Iteration: " << it << ", T = " << T << ", tourCost: " << tourCost(tour) << '\n';
 #else
-            fout << it << ' ' << tourCost(tour) << '\n';
+            fout << it << ' ' << max_dist * tourCost(tour) << '\n';
 #endif
 
             it += 1;
         }
-        std::cout << "Current temperature: " << TN << ", Current tour cost: " << tourCost(tour) << '\n';
 
-        return tour;
+#ifndef LOCAL_DEBUG
+         {
+            std::lock_guard<std::mutex> lock(results_mutex);
+            std::ofstream out;
+            out.open("res/results.txt", std::ios_base::app);
+            if (!out.is_open()) {
+                // não lança exceção dentro do lock por segurança; escreve no cerr
+                std::cerr << "Could not open res/results.txt for appending\n";
+            } else {
+                out << cooler.name << ' ' << max_dist * tourCost(tour) << '\n';
+            }
+            // out é fechado ao sair do escopo
+        }
+#endif
     }
 
 };
 
 signed main() {
 
+#ifdef FIFTY_ONE
+    auto dist = readMatrixDistanceFromFile("res/tsp-51.txt");
+#else
     auto dist = readMatrixDistanceFromFile("res/tsp-100.txt");
-    TSPSolver solver(dist, 10);
-    auto best_tour = solver.solve();
+#endif
+
+    try {
+        const int N_RUNS = 10; // número de execuções paralelas
+        const int ITER_PER_TEMP = 8;
+
+        std::vector<std::thread> threads;
+        threads.reserve(N_RUNS);
+
+        for (int run = 0; run < N_RUNS; ++run) {
+            threads.emplace_back([&, run]() {
+                TSPSolver solver(dist, ITER_PER_TEMP);
+                solver.solve(run);
+            });
+        }
+
+        // join all threads
+        for (auto &t : threads) {
+            if (t.joinable()) t.join();
+        }
+
+    } catch (const std::exception& ex) {
+        std::cerr << "Fatal error: " << ex.what() << '\n';
+        return 1;
+    }
 
     return 0;
 }
