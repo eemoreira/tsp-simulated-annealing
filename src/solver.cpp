@@ -126,8 +126,19 @@ struct TSPSolver {
         while (number_swaps--) {
             int i = uniform(0, N - 1);
             int j = uniform(0, N - 1);
-            //std::swap(tour[i], tour[j]);
-            std::reverse(tour.begin() + std::min(i, j), tour.begin() + std::max(i, j) + 1);
+
+            bool reverse = uniform(0, 1);
+            if (reverse) {
+                if (i > j) std::swap(i, j);
+                std::reverse(tour.begin() + i, tour.begin() + j + 1);
+            } else {
+                if (i > j) std::swap(i, j);
+                // erases the subarray [i, j] and reinserts at random position
+                std::vector<int> segment(tour.begin() + i, tour.begin() + j + 1);
+                tour.erase(tour.begin() + i, tour.begin() + j + 1);
+                int k = uniform(0, int(tour.size()));
+                tour.insert(tour.begin() + k, segment.begin(), segment.end());
+            }
         }
     }
 
@@ -201,7 +212,7 @@ signed main() {
 #endif
 
     try {
-        const int N_RUNS = 10; // número de execuções paralelas
+        const int N_RUNS = 10;
         const int ITER_PER_TEMP = 8;
 
         std::vector<std::thread> threads;
@@ -214,7 +225,6 @@ signed main() {
             });
         }
 
-        // join all threads
         for (auto &t : threads) {
             if (t.joinable()) t.join();
         }
