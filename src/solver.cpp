@@ -128,12 +128,10 @@ struct TSPSolver {
             int j = uniform(0, N - 1);
 
             bool reverse = uniform(0, 1);
+            if (i > j) std::swap(i, j);
             if (reverse) {
-                if (i > j) std::swap(i, j);
                 std::reverse(tour.begin() + i, tour.begin() + j + 1);
             } else {
-                if (i > j) std::swap(i, j);
-                // erases the subarray [i, j] and reinserts at random position
                 std::vector<int> segment(tour.begin() + i, tour.begin() + j + 1);
                 tour.erase(tour.begin() + i, tour.begin() + j + 1);
                 int k = uniform(0, int(tour.size()));
